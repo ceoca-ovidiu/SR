@@ -1,0 +1,28 @@
+function [magP, phP] = polarForm(P)
+rP = real(P);
+iP = imag(P);
+%mag = raizcuadrada(parteReal(P)^2+parteImaginaria(P)^2)
+magP = sqrt(rP.^2+iP.^2);
+
+%Obtiene phP entre 0 y -2pi
+%2pi). Fuente:
+%http://en.wikipedia.org/wiki/Polar_coordinate_system#Converting_between_polar_and_Cartesian_coordinates
+phP = zeros(size(rP));
+
+%x==0, y>=0 -> pi/2
+%x==0, y<0  -> pi+(pi/2)
+pos = find(rP==0);
+phP(pos) =  pi/2 + pi*(iP(pos)<0);
+
+%x<0 -> atan(y/x)+pi
+pos = find(rP<0);
+phP(pos) = atan(iP(pos)./rP(pos)) + pi;
+
+%x>0, y>=0 -> atan(y/x)
+%x>0, y<0 -> atan(y/x) + 2*pi
+pos = find(rP>0);
+phP(pos) = atan(iP(pos)./rP(pos)) + 2*pi*(iP(pos)<0);
+
+%Ajuste para que el la fase esté entre -2pi y 0 (Bordhesani simplemente
+%cambia el signo)
+phP = (-1)*phP;

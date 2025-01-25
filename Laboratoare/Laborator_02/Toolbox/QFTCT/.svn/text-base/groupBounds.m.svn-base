@@ -1,0 +1,13 @@
+function bounds = groupBounds(ph, varargin)
+%En esta versión, vargarin esta compuesto por nBounds parejas de
+%bound,wBound. Esta última indica qué frecuencias se corresponden con la
+%bound. Cuando los bounds sean clases no será necesario utilizar estar
+%parejas, pues ambas estarán incluídas en los objetos
+
+
+nBounds = size(varargin,2);
+bounds=[];
+for i=1:nBounds
+    bound = cell2mat(varargin(i));
+    bounds = [bounds; bound];
+end

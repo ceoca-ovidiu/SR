@@ -1,0 +1,19 @@
+function genTemplate(P, w)
+
+nPlantas = length(P);
+nFreq = length(w);
+Pfreq = squeeze(freqresp(P,w));
+[mag,phase] = polarForm(Pfreq);
+
+phase = phase + 2*pi;
+phase = -phase;
+
+mag = 20*log10(mag);
+phase = phase*180/pi;
+
+colores=['r' 'g' 'b' 'c' 'm' 'y' 'k'];
+for i = 1:nFreq
+    plot(phase(i,:),mag(i,:),['o',colores(mod(i-1,7)+1)]);
+    hold on;
+end
+hold off;

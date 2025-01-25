@@ -1,0 +1,101 @@
+function bounds = sisobounds1(P, w, ph, W1, nom)
+%Argumentos:
+%   P:Templates (Pxw)
+%   w:Frecuencias
+%   ph: Frecuencias de fase
+%   nom: Índice de la planta nominal
+
+%%Conversión de P a valores de magnitud y fase (formaPolar)
+[magP, phP] = polarForm(P);
+
+%%Conversión de ph a radianes (suponiendo que entran como grados)
+ph = ph*pi/180;
+
+ph_exp=[];
+
+
+
+[nPlantas, nFreq] = size(P);
+
+colores=['r' 'g' 'b' 'c' 'm' 'y' 'k'];
+
+
+if isa(W1,'tf')
+    prod = squeeze(freqresp(W1,w));
+    [W,resto] = polarForm(prod);
+else
+    W = W1*ones(size(w));
+end
+
+for i=1:length(w)
+
+    %OJOOOOOOOOOOOOOOOO! NO SÉ DE DÓNDE SACA ESTO BORDHESANI!
+    ph_i=ph-phP(nom,i);
+    ph_exp=[];
+    for j=1:nPlantas
+        ph_exp = [ph_exp; ph_i];
+    end
+
+    %Obtener la información relativa a la frecuencia i
+
+    mag_i = magP(:,i);
+    phase_i = phP(:,i);
+    mag_i_exp = [];
+    phase_i_exp = [];
+    for j=1:size(ph')
+        mag_i_exp = [mag_i_exp mag_i];
+        phase_i_exp = [phase_i_exp phase_i];
+    end
+
+
+    g1=((-1).*cos(phase_i_exp+ph_exp) - sqrt(cos(phase_i_exp+ph_exp).^2-(1-1./(W(i)^2*mag_i_exp.^2))))./(mag_i_exp.*(1-1./(W(i)^2*mag_i_exp.^2)));
+
+
+
+    %Hay que descartar las posiciones en los que g1 o g2 sea negativo o
+    %números complejos
+
+    %En g1 se sustituyen por un número muy pequeño, para que no influyan en
+    %el cálculo del máximo
+    pos=find((g1<=0) | (imag(g1)~=0));
+    g1(pos)=1e16;
+
+
+    %Hay que calcular los máximos y los mínimos de cada ph_exp
+    %Supongo que g1 es el mayor y g2 es el menor, REVISAR
+    gMin = min(g1,[],1);
+    %Ahora hay que multiplicarlo por el valor de la planta nominal en la
+    %frecuencia i
+    p0Min = gMin*magP(nom,i);
+    posYMin=find(p0Min~=(1e16)*magP(nom,i));
+    posBorrar=find(p0Min==(1e16)*magP(nom,i));
+    p0Min(posBorrar)=1e16;
+
+    %%%%%%%%%%%%%%%%%%CALCULO DE G2%%%%%%%%%%%%%%%%%%
+    %g2 sólo se calcula si delta*p > 1 para todo p
+
+    prop = find((W(i)*mag_i)<1);
+    if (length(prop(:))==0)
+        g2=((-1).*cos(phase_i_exp+ph_exp) + sqrt(cos(phase_i_exp+ph_exp).^2-(1-1./(W(i)^2*mag_i_exp.^2))))./(mag_i_exp.*(1-1./(W(i)^2*mag_i_exp.^2)));
+        %En g2 se sustituyen por un número muy grande, para que no influyan en
+        %el cálculo del minimo
+        pos=find((g2<=0) | (imag(g2)~=0));
+        g2(pos)=1e-16;
+        gMax = max(g2,[],1);
+        p0Max = gMax*magP(nom,i);
+        posYMax=find(p0Max~=(1e-16)*magP(nom,i));
+        posBorrar=find(p0Max==(1e-16)*magP(nom,i));
+        p0Max(posBorrar)=1e-16;
+
+    else
+        p0Max = 1e-16*ones(size(p0Min));
+        posYMax = [];
+    end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+    boundInf = 20*log10(p0Min);
+    boundSup = 20*log10(p0Max);
+
+    bounds(i,:)=[boundSup boundInf w(i)];
+end

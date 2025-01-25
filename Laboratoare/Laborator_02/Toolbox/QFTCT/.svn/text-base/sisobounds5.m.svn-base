@@ -1,0 +1,144 @@
+function bounds = sisobounds5(P, w, ph, Winf, Wsup, nom)
+%Argumentos:
+%   P:Templates (Pxw)
+%   w:Frecuencias
+%   ph: Frecuencias de fase
+%   nom: Índice de la planta nominal
+
+%%Conversión de P a valores de magnitud y fase (formaPolar)
+[magP, phP] = polarForm(P);
+
+%%Conversión de ph a radianes (suponiendo que entran como grados)
+ph = ph*pi/180;
+
+ph_exp=[];
+
+
+
+[nPlantas, nFreq] = size(P);
+
+colores=['r' 'g' 'b' 'c' 'm' 'y' 'k'];
+
+
+if isa(Winf,'tf')
+    prod = squeeze(freqresp(Winf,w));
+    [Winf_def,resto] = polarForm(prod);
+else
+    Winf_def = Winf*ones(size(w));
+end
+
+if isa(Wsup,'tf')
+    prod = squeeze(freqresp(Wsup,w));
+    [Wsup_def,resto] = polarForm(prod);
+else
+    Wsup_def = Winf*ones(size(w));
+end
+
+W = Wsup_def./Winf_def;
+
+for i=1:length(w)
+
+    %OJOOOOOOOOOOOOOOOO! NO SÉ DE DÓNDE SACA ESTO BORDHESANI!
+    ph_i=ph-phP(nom,i);
+    ph_exp=[];
+    for j=1:nPlantas
+        ph_exp = [ph_exp; ph_i];
+    end
+
+    W_cuadrado = W(i)^2;
+    %g1=[];
+    g2=[];
+
+
+    for j=1:(length(P)-1)
+        ph_exp_parcial=ph_exp(j:length(P)-1,:);
+        mag_e = magP(j,i) * ones(length(P)-j,1);
+        phase_e = phP(j,i) * ones(length(P)-j,1);
+
+        mag_d = magP(j+1:length(P),i);
+        phase_d = phP(j+1:length(P),i);
+
+        mag_e_exp = [];
+        phase_e_exp = [];
+        mag_d_exp = [];
+        phase_d_exp = [];
+
+        for j=1:size(ph')
+            mag_e_exp = [mag_e_exp mag_e];
+            phase_e_exp = [phase_e_exp phase_e];
+
+            mag_d_exp = [mag_d_exp mag_d];
+            phase_d_exp = [phase_d_exp phase_d];
+        end
+        %Precalcular los cosenos?
+        p_e = mag_e_exp;
+        p_d = mag_d_exp;
+        o_e = phase_e_exp;
+        o_d = phase_d_exp;
+
+
+        %TODO: mag_d_exp.*cos(ph_exp_parcial+phase_e_exp)/W_cuadrado se calcula
+        %varias veces, se podría reutilizar
+
+
+
+        g2a= (p_d.*cos(ph_exp_parcial+o_e)/W_cuadrado-p_e.*cos(ph_exp_parcial+o_d))./(p_e.*mag_d_exp*(1-1/W_cuadrado)) ...
+            + sqrt((p_e.*cos(ph_exp_parcial+o_d)-p_d.*cos(ph_exp_parcial+o_e)/W_cuadrado).^2-(1-1/W_cuadrado)*(p_e.^2-p_d.^2/W_cuadrado))./ ...
+            (p_e.*p_d*(1-1/W_cuadrado));
+        %         g1a= (p_d.*cos(ph_exp_parcial+o_e)/W_cuadrado-p_e.*cos(ph_exp_parcial+o_d))./(p_e.*mag_d_exp*(1-1/W_cuadrado)) ...
+        %             - sqrt((p_e.*cos(ph_exp_parcial+o_d)-p_d.*cos(ph_exp_parcial+o_e)/W_cuadrado).^2-(1-1/W_cuadrado)*(p_e.^2-p_d.^2/W_cuadrado))./ ...
+        %             (p_e.*p_d*(1-1/W_cuadrado));
+
+        g2b= (p_e.*cos(ph_exp_parcial+o_d)/W_cuadrado-p_d.*cos(ph_exp_parcial+o_e))./(p_d.*mag_e_exp*(1-1/W_cuadrado)) ...
+            + sqrt((p_d.*cos(ph_exp_parcial+o_e)-p_e.*cos(ph_exp_parcial+o_d)/W_cuadrado).^2-(1-1/W_cuadrado)*(p_d.^2-p_e.^2/W_cuadrado))./ ...
+            (p_d.*p_e*(1-1/W_cuadrado));
+        %         g1b= (p_e.*cos(ph_exp_parcial+o_d)/W_cuadrado-p_d.*cos(ph_exp_parcial+o_e))./(p_d.*mag_e_exp*(1-1/W_cuadrado)) ...
+        %             - sqrt((p_d.*cos(ph_exp_parcial+o_e)-p_e.*cos(ph_exp_parcial+o_d)/W_cuadrado).^2-(1-1/W_cuadrado)*(p_d.^2-p_e.^2/W_cuadrado))./ ...
+        %             (p_d.*p_e*(1-1/W_cuadrado));
+
+
+        %Hay que descartar las posiciones en los que g1 o g2 sea negativo o
+        %números complejos
+
+        g2a = [g2a; g2b];
+        %         g1a = [g1a; g1b];
+
+        %En g2 se sustituyen por un número muy pequeño, para que no influyan en
+        %el cálculo del máximo
+        pos=find((g2a<=0) | (imag(g2a)~=0));
+        g2a(pos)=1e-16;
+
+
+
+        %         g1a(:,:)=1e16;
+        %En g1 se sustituyen por un número muy grande, para que no influyan en
+        %el cálculo del minimo
+        %         pos=find((g2a<=0) | (imag(g2a)~=0));
+        %         g2a(pos)=1e16;
+        g2=[g2;g2a];
+        g1 = ones(size(g2))*1e16;
+        %         g2=[g2;g2a];
+        %No es necesario calcular g2 en los problemas de 2-DOF
+
+
+    end
+    %Hay que calcular los máximos y los mínimos de cada ph_exp
+    gMax = max(g2,[],1);
+    gMin = min(g1,[],1);
+    %Ahora hay que multiplicarlo por el valor de la planta nominal en la
+    %frecuencia i
+    p0Max = gMax*magP(nom,i);
+    posBorrar=find(p0Max==(1e-16)*magP(nom,i));
+    p0Max(posBorrar)=1e-16;
+    posYMax=find(p0Max~=1e-16);
+    
+    p0Min = 1e16*ones(size(p0Max));
+    posYMin = [];
+
+    boundSup = 20*log10(p0Max);
+    boundInf = 20*log10(p0Min);
+    
+    %     posYMin=find(p0Min~=(1e16)*magP(nom,i));
+
+    bounds(i,:)=[boundSup boundInf w(i)];
+end
